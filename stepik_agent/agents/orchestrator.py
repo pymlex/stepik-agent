@@ -19,6 +19,7 @@ from stepik_agent.db.search_log import SearchLogStore
 from stepik_agent.llm.client import LLMClient
 from stepik_agent.pipeline.forms import form_prompt_text, parse_form_response
 from stepik_agent.pipeline.history import MessageHistory
+from stepik_agent.ranking.weighted_scorer import DEFAULT_WEIGHTS, rank_courses_soft
 from stepik_agent.security.jailbreak import is_jailbreak_attempt, jailbreak_response
 
 
@@ -47,7 +48,6 @@ class AgentOrchestrator:
         self.goal: LearningGoal | None = None
         self.filters = DeterministicFilters()
         self.courses: list[dict] = []
-        self.rejected_det: list[dict] = []
         self.ranking: RankingResult | None = None
         self.pending_enroll: EnrollmentRequest | None = None
         self._awaiting_form = False
@@ -120,31 +120,21 @@ class AgentOrchestrator:
 
         self.stage = AgentStage.SEARCH_INITIAL
         parts.append(stage_banner(self.stage))
-        kept, rej, found_raw = self.search_skill.run_searches(
+        kept, found_raw = self.search_skill.run_searches(
             query_set.queries,
             self.session_id,
             self.filters,
+            goal_text,
             per_query_limit=n,
             stage="initial",
         )
-        self.rejected_det = rej
 
-        if not kept:
+        if found_raw == 0:
             self.stage = AgentStage.PRESENT
-            if found_raw == 0:
-                hint = (
-                    "Stepik не вернул курсов по этим запросам. "
-                    "Попробуйте другую формулировку цели или «ещё поиск»."
-                )
-            else:
-                titles = ", ".join(
-                    f"{c.get('title', '')[:40]} ({c.get('_reject_reason', '')})"
-                    for c in self.rejected_det[:3]
-                )
-                hint = (
-                    f"Найдено {found_raw} курсов, все отсеяны фильтрами. {titles}. "
-                    "Если подходят платные — во 2-й строке формы «пропустить» или в чате: «можно платные»."
-                )
+            hint = (
+                "Stepik не вернул курсов по этим запросам. "
+                "Попробуйте другую формулировку цели или «ещё поиск»."
+            )
             return (
                 "\n\n".join(parts)
                 + "\n\n"
@@ -164,23 +154,26 @@ class AgentOrchestrator:
 
         self.stage = AgentStage.SEARCH_REFINED
         parts.append(stage_banner(self.stage))
-        kept2, rej2, _ = self.search_skill.run_searches(
+        kept2, _ = self.search_skill.run_searches(
             refinement.queries,
             self.session_id,
             self.filters,
+            goal_text,
             per_query_limit=n,
             stage="refined",
         )
-        self.rejected_det.extend(rej2)
         merged = {c["id"]: c for c in kept}
         for c in kept2:
             merged[c["id"]] = c
-        self.courses = list(merged.values())
+        self.courses = rank_courses_soft(list(merged.values()), goal_text, self.filters)
 
         self.stage = AgentStage.FRESHNESS_CHECK
         parts.append(stage_banner(self.stage))
         freshness = self.rank_skill.build_freshness_notes(goal_text, self.courses)
         parts.append("Актуальность:\n" + freshness)
+        self.courses = rank_courses_soft(
+            self.courses, goal_text, self.filters, freshness
+        )
 
         self.stage = AgentStage.RANK
         parts.append(stage_banner(self.stage))
@@ -189,7 +182,6 @@ class AgentOrchestrator:
             self.filters.model_dump(exclude_none=True),
             self.courses,
             freshness,
-            self.rejected_det,
         )
 
         self.stage = AgentStage.PRESENT
@@ -201,7 +193,17 @@ class AgentOrchestrator:
         lines = ["## Подборка курсов", ""]
         if not ranking.ranked:
             lines.append(ranking.summary)
+            if ranking.detailed_explanation:
+                lines.extend(["", ranking.detailed_explanation])
             return "\n".join(lines)
+
+        weights = ranking.weights or DEFAULT_WEIGHTS
+        lines.append("Итоговый балл = сумма весов критериев × балл критерия.")
+        lines.append("")
+        lines.append("Веса:")
+        for name, weight in weights.items():
+            lines.append(f"- {name}: {weight:.2f}")
+        lines.append("")
 
         for item in sorted(ranking.ranked, key=lambda x: x.rank):
             url = ""
@@ -209,29 +211,28 @@ class AgentOrchestrator:
                 if c["id"] == item.course_id:
                     url = c.get("canonical_url", "")
                     break
-            lines.append(f"{item.rank}. **{item.title}** (id={item.course_id})")
+            lines.append(
+                f"{item.rank}. **{item.title}** (id={item.course_id}, балл {item.score:.3f})"
+            )
             if url:
                 lines.append(f"   {url}")
+            for dim in item.dimensions:
+                lines.append(
+                    f"   - {dim.name} (вес {dim.weight:.2f}): "
+                    f"{dim.score:.2f} — {dim.note}"
+                )
             for ev in item.evidence:
                 lines.append(f"   - `{ev.field}`: {ev.excerpt}")
-            if item.freshness_note:
-                lines.append(f"   - актуальность: {item.freshness_note}")
 
-        lines.extend(["", "## Почему такое ранжирование", "", ranking.summary])
+        lines.extend(["", "## Краткое резюме", "", ranking.summary])
+        lines.extend(["", "## Подробное обоснование ранжирования", ""])
+        detail = ranking.detailed_explanation.strip() or ranking.summary
+        lines.append(detail)
 
         if ranking.rejected:
-            lines.extend(["", "## Отсеянные курсы", ""])
+            lines.extend(["", "## Курсы с низким итоговым баллом", ""])
             for rej in ranking.rejected[:8]:
                 lines.append(f"- {rej.title} (id={rej.course_id}): {rej.reason}")
-                for ev in rej.evidence:
-                    lines.append(f"  - `{ev.field}`: {ev.excerpt}")
-
-        if self.rejected_det:
-            lines.extend(["", "## Отсеянные фильтрами", ""])
-            for c in self.rejected_det[:8]:
-                lines.append(
-                    f"- {c.get('title')} (id={c.get('id')}): {c.get('_reject_reason')}"
-                )
 
         lines.extend([
             "",
@@ -253,7 +254,6 @@ class AgentOrchestrator:
         )
         if any(p in lowered for p in paid_relax):
             self.filters.is_paid = None
-            self.rejected_det = []
             return stage_banner(AgentStage.SEARCH_INITIAL) + "\n\n" + self._run_search_pipeline()
 
         if "ещё поиск" in lowered or "еще поиск" in lowered or "search more" in lowered:
@@ -263,23 +263,24 @@ class AgentOrchestrator:
                 self.prefs_snapshot(),
                 count=3,
             )
-            kept, rej, _ = self.search_skill.run_searches(
+            goal = self.goal.raw_text if self.goal else ""
+            kept, _ = self.search_skill.run_searches(
                 extra.queries,
                 self.session_id,
                 self.filters,
+                goal,
                 per_query_limit=5,
                 stage="follow_up",
             )
-            self.rejected_det.extend(rej)
+            merged = {c["id"]: c for c in self.courses}
             for c in kept:
-                if c["id"] not in {x["id"] for x in self.courses}:
-                    self.courses.append(c)
+                merged[c["id"]] = c
+            self.courses = rank_courses_soft(list(merged.values()), goal, self.filters)
             self.ranking = self.rank_skill.rank(
-                self.goal.raw_text if self.goal else "",
+                goal,
                 self.filters.model_dump(exclude_none=True),
                 self.courses,
                 "",
-                self.rejected_det,
             )
             return stage_banner(AgentStage.RANK) + "\n\n" + self._format_ranking(self.ranking)
 
@@ -290,7 +291,6 @@ class AgentOrchestrator:
                 self.filters.model_dump(exclude_none=True),
                 self.courses,
                 "",
-                self.rejected_det,
             )
             return stage_banner(AgentStage.RANK) + "\n\n" + self._format_ranking(self.ranking)
 

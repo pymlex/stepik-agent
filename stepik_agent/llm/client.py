@@ -55,6 +55,9 @@ class LLMClient:
                 data["summary"] = str(data.get("analysis", data.get("rationale", "")))[:2000]
             data.setdefault("ranked", [])
             data.setdefault("rejected", [])
+            if not data.get("detailed_explanation"):
+                data["detailed_explanation"] = data["summary"]
+            data.setdefault("weights", {})
         if response_model.__name__ == "StepikSearchQuerySet" and "queries" not in data:
             data["queries"] = data.get("search_queries", data.get("keywords", []))
         if response_model.__name__ == "StepikSearchQueryRefinement":

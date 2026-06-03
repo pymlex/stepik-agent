@@ -4,15 +4,15 @@ from models.schemas import DeterministicFilters, StepikSearchQuerySet
 from stepik_agent.db.search_log import SearchLogStore
 from stepik_agent.llm.client import LLMClient
 from stepik_agent.llm import prompts
+from stepik_agent.ranking.weighted_scorer import rank_courses_soft
 from stepik_agent.stepik.api import search_courses
-from stepik_agent.stepik.filters import apply_deterministic_filters
 
 
 logger = logging.getLogger("stepik_agent")
 
 
 class SearchSkill:
-    """Multi-query Stepik search with merge and deterministic filter."""
+    """Multi-query Stepik search with merge and soft weighted pre-ranking."""
 
     def __init__(
         self,
@@ -46,9 +46,10 @@ class SearchSkill:
         queries: list[str],
         session_id: str,
         filters: DeterministicFilters,
+        goal_text: str,
         per_query_limit: int,
         stage: str,
-    ) -> tuple[list[dict], list[dict], int]:
+    ) -> tuple[list[dict], int]:
         merged: dict[int, dict] = {}
         for query in queries:
             batch = search_courses(
@@ -64,5 +65,5 @@ class SearchSkill:
                 merged[course["id"]] = course
 
         all_courses = list(merged.values())
-        kept, rejected = apply_deterministic_filters(all_courses, filters)
-        return kept, rejected, len(all_courses)
+        ranked = rank_courses_soft(all_courses, goal_text, filters)
+        return ranked, len(all_courses)

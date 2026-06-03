@@ -1,13 +1,21 @@
 import json
 
-from models.schemas import RankingResult, FreshnessQuerySet
+from models.schemas import (
+    CourseEvidence,
+    DimensionScore,
+    FreshnessQuerySet,
+    RankedCourse,
+    RankingResult,
+    RejectedCourse,
+)
 from stepik_agent.llm.client import LLMClient
 from stepik_agent.llm import prompts
+from stepik_agent.ranking.weighted_scorer import DEFAULT_WEIGHTS
 from stepik_agent.search.ddg import ddg_search
 
 
 class RankSkill:
-    """Freshness via DDG, then structured ranking with evidence."""
+    """Freshness via DDG, weighted scores, LLM long explanation."""
 
     def __init__(self, llm: LLMClient) -> None:
         self.llm = llm
@@ -46,19 +54,21 @@ class RankSkill:
         filters_dict: dict,
         courses: list[dict],
         freshness: str,
-        rejected_det: list[dict],
     ) -> RankingResult:
         if not courses:
             return RankingResult(
                 ranked=[],
                 rejected=[],
-                summary="На Stepik не найдено курсов по заданным запросам и фильтрам.",
+                summary="На Stepik не найдено курсов по запросам.",
+                detailed_explanation="Поиск не вернул карточек курсов. Измените формулировку цели или ослабьте язык в форме.",
+                weights=DEFAULT_WEIGHTS,
             )
 
-        courses_json = json.dumps(courses, ensure_ascii=False, indent=2)[:12000]
+        courses_json = json.dumps(courses, ensure_ascii=False, indent=2)[:14000]
         user = prompts.RANK_USER_TEMPLATE.format(
             goal=goal_text,
             filters=filters_dict,
+            weights=json.dumps(DEFAULT_WEIGHTS, ensure_ascii=False),
             freshness=freshness or "(not run)",
             courses=courses_json,
         )
@@ -67,59 +77,107 @@ class RankSkill:
         )
 
         if self.llm.settings.mock_llm or not result.ranked:
-            det = self._deterministic_rank(courses, rejected_det, goal_text)
-            if result.summary and result.summary.strip():
-                det.summary = result.summary
-            return det
+            return self._build_from_weighted(courses, goal_text, freshness, result)
 
+        if not result.detailed_explanation.strip():
+            built = self._build_from_weighted(courses, goal_text, freshness, result)
+            result.detailed_explanation = built.detailed_explanation
+        if not result.weights:
+            result.weights = DEFAULT_WEIGHTS
         return result
 
-    def _deterministic_rank(
+    def _build_from_weighted(
         self,
         courses: list[dict],
-        rejected_det: list[dict],
         goal_text: str,
+        freshness: str,
+        llm_result: RankingResult | None = None,
     ) -> RankingResult:
-        from models.schemas import RankedCourse, RejectedCourse, CourseEvidence
-
         ranked = []
-        for idx, course in enumerate(courses[:5], start=1):
+        for idx, course in enumerate(courses[:8], start=1):
             evidence = []
-            for field in ("summary", "requirements", "target_audience"):
+            for field in ("summary", "description", "requirements", "workload"):
                 val = course.get(field)
                 if val:
                     evidence.append(
-                        CourseEvidence(field=field, excerpt=str(val)[:120])
+                        CourseEvidence(field=field, excerpt=str(val)[:140])
                     )
-                    break
+            dims = [
+                DimensionScore(
+                    name=d["name"],
+                    weight=d["weight"],
+                    score=d["score"],
+                    note=d["note"],
+                )
+                for d in course.get("_score_breakdown", [])
+            ]
             ranked.append(
                 RankedCourse(
                     course_id=course["id"],
                     title=course.get("title", ""),
                     rank=idx,
-                    score=max(0.5, 1.0 - 0.1 * idx),
+                    score=course.get("_weighted_score", 0.0),
                     evidence=evidence,
+                    dimensions=dims,
                 )
             )
 
         rejected = []
-        for course in rejected_det[:10]:
+        for course in courses[8:12]:
             rejected.append(
                 RejectedCourse(
                     course_id=course["id"],
                     title=course.get("title", ""),
-                    reason=course.get("_reject_reason", "filter"),
-                    evidence=[
-                        CourseEvidence(
-                            field="language",
-                            excerpt=str(course.get("language", "")),
-                        )
-                    ],
+                    reason=f"низкий взвешенный балл {course.get('_weighted_score', 0)}",
+                    evidence=[],
                 )
             )
 
+        explanation = self._format_weighted_explanation(
+            ranked, goal_text, freshness, llm_result
+        )
+        summary = (
+            llm_result.summary
+            if llm_result and llm_result.summary.strip()
+            else f"Ранжирование по взвешенным критериям для цели: {goal_text[:100]}"
+        )
         return RankingResult(
             ranked=ranked,
             rejected=rejected,
-            summary=f"Ранжирование по соответствию цели: {goal_text[:80]}",
+            summary=summary,
+            detailed_explanation=explanation,
+            weights=DEFAULT_WEIGHTS,
         )
+
+    def _format_weighted_explanation(
+        self,
+        ranked: list[RankedCourse],
+        goal_text: str,
+        freshness: str,
+        llm_result: RankingResult | None,
+    ) -> str:
+        lines = [
+            "Итоговый балл курса — взвешенная сумма по критериям. "
+            "Если пользователь не задал параметр в форме, критерию присвоен умеренно низкий балл 0.35, "
+            "а не жёсткое отсечение. Несовпадения с хотелками снижают балл через веса.",
+            "",
+            "Веса критериев:",
+        ]
+        for name, weight in DEFAULT_WEIGHTS.items():
+            lines.append(f"- {name}: {weight:.2f}")
+        lines.extend(["", f"Цель обучения: {goal_text}", ""])
+        if freshness:
+            lines.extend(["Актуальность 2026:", freshness[:600], ""])
+        if llm_result and llm_result.detailed_explanation.strip():
+            lines.extend(["", llm_result.detailed_explanation, ""])
+        lines.append("Разбор по курсам:")
+        for item in ranked[:5]:
+            lines.append(
+                f"{item.rank}. {item.title} — итог {item.score:.3f}"
+            )
+            for dim in item.dimensions:
+                lines.append(
+                    f"   {dim.name} (вес {dim.weight:.2f}): "
+                    f"балл {dim.score:.2f} — {dim.note}"
+                )
+        return "\n".join(lines)

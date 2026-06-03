@@ -53,6 +53,13 @@ class CourseEvidence(BaseModel):
     excerpt: str
 
 
+class DimensionScore(BaseModel):
+    name: str
+    weight: float = Field(ge=0.0, le=1.0)
+    score: float = Field(ge=0.0, le=1.0)
+    note: str = Field(min_length=1)
+
+
 class RankedCourse(BaseModel):
     course_id: int
     title: str
@@ -60,6 +67,7 @@ class RankedCourse(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
     evidence: list[CourseEvidence] = Field(default_factory=list)
     freshness_note: str | None = None
+    dimensions: list[DimensionScore] = Field(default_factory=list)
 
 
 class RejectedCourse(BaseModel):
@@ -73,6 +81,11 @@ class RankingResult(BaseModel):
     ranked: list[RankedCourse] = Field(default_factory=list)
     rejected: list[RejectedCourse] = Field(default_factory=list)
     summary: str = Field(min_length=1)
+    detailed_explanation: str = Field(
+        default="",
+        description="Long weighted ranking rationale for chat",
+    )
+    weights: dict[str, float] = Field(default_factory=dict)
 
 
 class FreshnessQuerySet(BaseModel):

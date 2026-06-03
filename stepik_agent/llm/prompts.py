@@ -33,26 +33,31 @@ Sample course titles and summaries:
 Propose refined queries and a short rationale."""
 
 
-RANK_SYSTEM = """You rank Stepik courses for the user's learning goal.
-Every ranked item must cite evidence from course card fields (field name + short excerpt).
-List rejected courses with explicit reasons referencing card fields.
-If data is missing, say so — do not invent ratings or workloads.
-Order ranked list from best to worst."""
+RANK_SYSTEM = """You rank Stepik courses using weighted criteria already computed in the input.
+Weights: relevance_to_goal, freshness_2026, language_fit, price_fit, workload_fit, rating_quality, popularity.
+Do not hard-drop courses for soft mismatches: reflect them as lower dimension scores.
+Missing card fields must keep low dimension scores from the input, do not invent data.
+Write detailed_explanation in Russian: 10-18 sentences. Explain weight formula, tradeoffs, why top courses win, why others are lower.
+Every ranked course needs dimensions list aligned with input breakdown and evidence from card fields.
+rejected is only for courses with total weighted score below 0.15 or clearly off-topic."""
 
 
 RANK_USER_TEMPLATE = """Goal:
 {goal}
 
-Deterministic filters:
+User filters (soft constraints, not hard):
 {filters}
 
-Freshness notes from web search:
+Weights:
+{weights}
+
+Freshness notes:
 {freshness}
 
-Courses:
+Courses with precomputed _weighted_score and _score_breakdown:
 {courses}
 
-Return ranking with evidence and rejection reasons."""
+Return JSON: ranked (best first), optional rejected, summary (2-3 sentences), detailed_explanation (long)."""
 
 
 FRESHNESS_SYSTEM = """Generate short web search queries to check whether topics/tools
