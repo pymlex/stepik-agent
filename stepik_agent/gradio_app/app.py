@@ -27,10 +27,13 @@ def build_app() -> gr.Blocks:
         gr.Markdown("# Stepik course agent")
         stage_box = gr.Textbox(
             label="Текущий этап",
-            value=stage_banner(AgentStage.WELCOME),
+            value=stage_banner(AgentStage.COLLECT_GOAL),
             interactive=False,
         )
-        chat = gr.Chatbot(label="Диалог", type="messages", value=[])
+        chat = gr.Chatbot(
+            label="Диалог",
+            value=[{"role": "assistant", "content": WELCOME_TEXT}],
+        )
         state = gr.State([])
         msg = gr.Textbox(label="Сообщение", placeholder="Опишите цель обучения…")
         send = gr.Button("Отправить")
@@ -40,11 +43,11 @@ def build_app() -> gr.Blocks:
             stage = stage_banner(orchestrator.stage)
             return new_hist, new_hist, stage
 
-        send.click(on_send, [msg, chat, state], [chat, state, stage_box])
-        msg.submit(on_send, [msg, chat, state], [chat, state, stage_box])
-        demo.load(
-            lambda: ([{"role": "assistant", "content": WELCOME_TEXT}], WELCOME_TEXT),
-            outputs=[chat, stage_box],
+        send.click(on_send, [msg, chat, state], [chat, state, stage_box]).then(
+            lambda: "", outputs=[msg]
+        )
+        msg.submit(on_send, [msg, chat, state], [chat, state, stage_box]).then(
+            lambda: "", outputs=[msg]
         )
 
     return demo
