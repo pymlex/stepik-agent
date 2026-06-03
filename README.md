@@ -135,25 +135,32 @@ stepik-agent/
 
 ## Setup
 
-```powershell
-cd C:\path\to\stepik-agent
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+```bash
+git clone https://github.com/pymlex/stepik-agent
+cd stepik-agent
 pip install -r requirements.txt
 playwright install chromium
-copy .env.example .env
-copy stepik_config.json.example stepik_config.json
+cp .env.example .env
+cp stepik_config.json.example stepik_config.json
 ```
 
-Edit `.env`:
+Fill `.env` with `OPENAI_API_KEY` or `ZVENOAI_API_KEY` for [Zveno API](https://api.zveno.ai/v1), optional `HF_TOKEN`, `GITHUB_TOKEN`, `STEPIK_API_TOKEN`. Set `STEPIK_AGENT_MOCK_LLM=1` for offline runs without LLM.
 
-```
-OPENAI_API_KEY=sk-...
-STEPIK_API_TOKEN=
-STEPIK_AGENT_MOCK_LLM=0
+```powershell
+git clone https://github.com/pymlex/stepik-agent
+cd stepik-agent
+pip install -r requirements.txt
+$env:PYTHONPATH = (Get-Location)
 ```
 
-Optional Stepik token increases rate limits. For offline tests set `STEPIK_AGENT_MOCK_LLM=1`.
+## End-to-end check
+
+```bash
+export PYTHONPATH="$(pwd)"
+python scripts/run_e2e.py
+```
+
+Expected terminal line: `E2E PASS`. The script runs goal, deterministic form, Stepik search, refine, freshness, rank, and writes to `data/search_log.db`.
 
 ## Run commands
 
@@ -173,9 +180,14 @@ bash scripts/run_gradio.sh
 
 ```powershell
 $env:PYTHONPATH = (Get-Location)
-$env:STEPIK_AGENT_MOCK_LLM = "1"
-$env:DEMO_GOAL = "Изучить Python для анализа данных"
 python scripts/run_demo.py
+```
+
+### End-to-end
+
+```powershell
+$env:PYTHONPATH = (Get-Location)
+python scripts/run_e2e.py
 ```
 
 ### Tests with LLM-as-a-Judge

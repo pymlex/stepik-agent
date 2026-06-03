@@ -45,12 +45,7 @@ def load_dotenv_file() -> None:
 
 def load_api_key() -> str | None:
     key = os.environ.get("OPENAI_API_KEY") or os.environ.get("ZVENOAI_API_KEY")
-    if key:
-        return key.strip()
-    token_file = ROOT / "zveno.txt"
-    if token_file.exists():
-        return token_file.read_text(encoding="utf-8").strip()
-    return None
+    return key.strip() if key else None
 
 
 def load_settings() -> AppSettings:

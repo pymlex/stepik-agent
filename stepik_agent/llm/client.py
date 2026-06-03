@@ -34,20 +34,18 @@ class LLMClient:
             return self._mock_response(response_model, user)
 
         schema = response_model.model_json_schema()
+        schema_hint = json.dumps(schema, ensure_ascii=False)
+        messages = [
+            {
+                "role": "system",
+                "content": f"{system}\nRespond with JSON only matching schema:\n{schema_hint}",
+            },
+            {"role": "user", "content": user},
+        ]
         response = self._client.chat.completions.create(
             model=self.settings.openai_model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": response_model.__name__,
-                    "schema": schema,
-                    "strict": True,
-                },
-            },
+            messages=messages,
+            response_format={"type": "json_object"},
         )
         raw = response.choices[0].message.content or "{}"
         logger.info("llm_structured_call model=%s", response_model.__name__)
