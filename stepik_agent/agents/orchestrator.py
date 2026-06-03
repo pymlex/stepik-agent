@@ -19,7 +19,8 @@ from stepik_agent.db.search_log import SearchLogStore
 from stepik_agent.llm.client import LLMClient
 from stepik_agent.pipeline.forms import form_prompt_text, parse_form_response
 from stepik_agent.pipeline.history import MessageHistory
-from stepik_agent.ranking.weighted_scorer import DEFAULT_WEIGHTS, rank_courses_soft
+from stepik_agent.gradio_app.formatting import format_ranking_for_chat
+from stepik_agent.ranking.weighted_scorer import rank_courses_soft
 from stepik_agent.security.jailbreak import is_jailbreak_attempt, jailbreak_response
 
 
@@ -116,7 +117,8 @@ class AgentOrchestrator:
         self.stage = AgentStage.GENERATE_QUERIES
         parts.append(stage_banner(self.stage))
         query_set = self.search_skill.generate_queries(goal_text, self.filters, prefs, count=5)
-        parts.append("Запросы: " + ", ".join(query_set.queries))
+        parts.append("")
+        parts.append("**Запросы:** " + ", ".join(query_set.queries))
 
         self.stage = AgentStage.SEARCH_INITIAL
         parts.append(stage_banner(self.stage))
@@ -187,59 +189,10 @@ class AgentOrchestrator:
         self.stage = AgentStage.PRESENT
         parts.append(stage_banner(self.stage))
         parts.append(self._format_ranking(self.ranking))
-        return "\n\n".join(parts)
+        return "\n\n---\n\n".join(parts)
 
     def _format_ranking(self, ranking: RankingResult) -> str:
-        lines = ["## Подборка курсов", ""]
-        if not ranking.ranked:
-            lines.append(ranking.summary)
-            if ranking.detailed_explanation:
-                lines.extend(["", ranking.detailed_explanation])
-            return "\n".join(lines)
-
-        weights = ranking.weights or DEFAULT_WEIGHTS
-        lines.append("Итоговый балл = сумма весов критериев × балл критерия.")
-        lines.append("")
-        lines.append("Веса:")
-        for name, weight in weights.items():
-            lines.append(f"- {name}: {weight:.2f}")
-        lines.append("")
-
-        for item in sorted(ranking.ranked, key=lambda x: x.rank):
-            url = ""
-            for c in self.courses:
-                if c["id"] == item.course_id:
-                    url = c.get("canonical_url", "")
-                    break
-            lines.append(
-                f"{item.rank}. **{item.title}** (id={item.course_id}, балл {item.score:.3f})"
-            )
-            if url:
-                lines.append(f"   {url}")
-            for dim in item.dimensions:
-                lines.append(
-                    f"   - {dim.name} (вес {dim.weight:.2f}): "
-                    f"{dim.score:.2f} — {dim.note}"
-                )
-            for ev in item.evidence:
-                lines.append(f"   - `{ev.field}`: {ev.excerpt}")
-
-        lines.extend(["", "## Краткое резюме", "", ranking.summary])
-        lines.extend(["", "## Подробное обоснование ранжирования", ""])
-        detail = ranking.detailed_explanation.strip() or ranking.summary
-        lines.append(detail)
-
-        if ranking.rejected:
-            lines.extend(["", "## Курсы с низким итоговым баллом", ""])
-            for rej in ranking.rejected[:8]:
-                lines.append(f"- {rej.title} (id={rej.course_id}): {rej.reason}")
-
-        lines.extend([
-            "",
-            "Можно: переранжировать приоритеты, запросить «ещё поиск», "
-            "задать вопрос по id курса, «запись на курс N».",
-        ])
-        return "\n".join(lines)
+        return format_ranking_for_chat(ranking, self.courses)
 
     def _handle_follow_up(self, user_text: str) -> str:
         lowered = user_text.lower().strip()

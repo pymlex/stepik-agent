@@ -20,4 +20,4 @@ STAGE_LABELS_RU = {
 
 def stage_banner(stage: AgentStage) -> str:
     label = STAGE_LABELS_RU.get(stage, stage.value)
-    return f"[Этап: {label}]"
+    return f"### Этап: {label}"

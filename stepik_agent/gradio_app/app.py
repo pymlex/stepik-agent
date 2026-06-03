@@ -53,7 +53,13 @@ def build_app() -> gr.Blocks:
             value=stage_banner(AgentStage.COLLECT_GOAL),
             interactive=False,
         )
-        chat = gr.Chatbot(label="Диалог", value=welcome)
+        chat = gr.Chatbot(
+            label="Диалог",
+            value=welcome,
+            render_markdown=True,
+            line_breaks=True,
+            height=520,
+        )
         state = gr.State(welcome)
         msg = gr.Textbox(label="Сообщение", placeholder="Опишите цель обучения…")
         send = gr.Button("Отправить")

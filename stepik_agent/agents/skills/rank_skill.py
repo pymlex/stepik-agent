@@ -10,6 +10,7 @@ from models.schemas import (
 )
 from stepik_agent.llm.client import LLMClient
 from stepik_agent.llm import prompts
+from stepik_agent.gradio_app.formatting import normalize_markdown
 from stepik_agent.ranking.weighted_scorer import DEFAULT_WEIGHTS
 from stepik_agent.search.ddg import ddg_search
 
@@ -83,9 +84,11 @@ class RankSkill:
         if llm_result.summary.strip():
             base.summary = llm_result.summary
         if llm_result.detailed_explanation.strip():
-            base.detailed_explanation = llm_result.detailed_explanation
+            base.detailed_explanation = normalize_markdown(
+                llm_result.detailed_explanation
+            )
         elif llm_result.summary.strip():
-            base.detailed_explanation = llm_result.summary
+            base.detailed_explanation = normalize_markdown(llm_result.summary)
         if llm_result.ranked:
             by_id = {item.course_id: item for item in llm_result.ranked}
             for item in base.ranked:
@@ -177,17 +180,5 @@ class RankSkill:
             lines.append(f"- {name}: {weight:.2f}")
         lines.extend(["", f"Цель обучения: {goal_text}", ""])
         if freshness:
-            lines.extend(["Актуальность 2026:", freshness[:600], ""])
-        if llm_result and llm_result.detailed_explanation.strip():
-            lines.extend(["", llm_result.detailed_explanation, ""])
-        lines.append("Разбор по курсам:")
-        for item in ranked[:5]:
-            lines.append(
-                f"{item.rank}. {item.title} — итог {item.score:.3f}"
-            )
-            for dim in item.dimensions:
-                lines.append(
-                    f"   {dim.name} (вес {dim.weight:.2f}): "
-                    f"балл {dim.score:.2f} — {dim.note}"
-                )
-        return "\n".join(lines)
+            lines.extend(["", "**Актуальность 2026:**", "", freshness[:600], ""])
+        return "\n\n".join(lines)
