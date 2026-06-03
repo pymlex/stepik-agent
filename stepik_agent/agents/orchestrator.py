@@ -137,9 +137,13 @@ class AgentOrchestrator:
                     "Попробуйте другую формулировку цели или «ещё поиск»."
                 )
             else:
+                titles = ", ".join(
+                    f"{c.get('title', '')[:40]} ({c.get('_reject_reason', '')})"
+                    for c in self.rejected_det[:3]
+                )
                 hint = (
-                    f"Найдено {found_raw} курсов, все отсеяны фильтрами. "
-                    "Для «только бесплатные» укажите «пропустить», если выдача пустая."
+                    f"Найдено {found_raw} курсов, все отсеяны фильтрами. {titles}. "
+                    "Если подходят платные — во 2-й строке формы «пропустить» или в чате: «можно платные»."
                 )
             return (
                 "\n\n".join(parts)
@@ -239,6 +243,18 @@ class AgentOrchestrator:
     def _handle_follow_up(self, user_text: str) -> str:
         lowered = user_text.lower().strip()
         self.stage = AgentStage.FOLLOW_UP
+
+        paid_relax = (
+            "можно плат",
+            "платные",
+            "не только бесплат",
+            "без фильтра бесплат",
+            "пропустить бесплат",
+        )
+        if any(p in lowered for p in paid_relax):
+            self.filters.is_paid = None
+            self.rejected_det = []
+            return stage_banner(AgentStage.SEARCH_INITIAL) + "\n\n" + self._run_search_pipeline()
 
         if "ещё поиск" in lowered or "еще поиск" in lowered or "search more" in lowered:
             extra = self.search_skill.generate_queries(
