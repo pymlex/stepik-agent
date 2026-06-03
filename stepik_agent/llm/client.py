@@ -6,6 +6,7 @@ from openai import OpenAI
 from pydantic import BaseModel
 
 from stepik_agent.config import AppSettings
+from stepik_agent.llm.json_parse import parse_json_object
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -49,7 +50,14 @@ class LLMClient:
         )
         raw = response.choices[0].message.content or "{}"
         logger.info("llm_structured_call model=%s", response_model.__name__)
-        data = json.loads(raw)
+        data = parse_json_object(raw)
+        if data is None:
+            logger.warning(
+                "llm_json_parse_failed model=%s raw_len=%s",
+                response_model.__name__,
+                len(raw),
+            )
+            return self._mock_response(response_model, user)
         if response_model.__name__ == "RankingResult":
             data.setdefault("ranked", [])
             data.setdefault("rejected", [])
@@ -86,14 +94,34 @@ class LLMClient:
         )
         return response.choices[0].message.content or ""
 
+    def _extract_goal_text(self, user: str) -> str:
+        marker = "Learning goal (free text):"
+        if marker in user:
+            tail = user.split(marker, 1)[1]
+            block = tail.split("\n\n", 1)[0].strip()
+            if block:
+                return block
+        for line in user.splitlines():
+            line = line.strip()
+            if len(line) > 12:
+                return line
+        return user[:120]
+
     def _mock_response(self, response_model: type[T], user: str) -> T:
         name = response_model.__name__
         if name == "StepikSearchQuerySet":
-            base = user.split()[:3]
-            word = base[-1] if base else "python"
-            return response_model.model_validate(
-                {"queries": [word, f"{word} basics", f"{word} course"]}
-            )
+            goal = self._extract_goal_text(user)
+            words = [w for w in goal.replace(",", " ").split() if len(w) > 3]
+            seed = words[0] if words else "курс"
+            queries = [
+                goal[:80],
+                f"{seed} stepik",
+                " ".join(words[:3]),
+                f"введение {seed}",
+                f"{seed} основы",
+            ]
+            queries = [q.strip() for q in queries if q.strip()][:5]
+            return response_model.model_validate({"queries": queries})
         if name == "StepikSearchQueryRefinement":
             return response_model.model_validate(
                 {
