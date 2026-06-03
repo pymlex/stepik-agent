@@ -10,11 +10,11 @@ Repository: [pymlex/stepik-agent](https://github.com/pymlex/stepik-agent)
 
 ```mermaid
 %%{init: {
-  "theme": "base", 
+  "theme": "base",
   "themeVariables": {
     "fontSize": "11px",
-    "mainBkg": "transparent",
-    "background": "transparent"
+    "clusterBkg": "none",
+    "clusterBorder": "none"
   }
 }}%%
 flowchart TB
