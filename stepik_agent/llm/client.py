@@ -51,12 +51,18 @@ class LLMClient:
         logger.info("llm_structured_call model=%s", response_model.__name__)
         data = json.loads(raw)
         if response_model.__name__ == "RankingResult":
-            if "summary" not in data:
-                data["summary"] = str(data.get("analysis", data.get("rationale", "")))[:2000]
             data.setdefault("ranked", [])
             data.setdefault("rejected", [])
-            if not data.get("detailed_explanation"):
-                data["detailed_explanation"] = data["summary"]
+            summary = str(data.get("summary", "")).strip()
+            detail = str(
+                data.get("detailed_explanation", data.get("analysis", ""))
+            ).strip()
+            if not summary:
+                summary = detail[:800] if detail else "Ранжирование по взвешенным критериям."
+            if not detail:
+                detail = summary
+            data["summary"] = summary
+            data["detailed_explanation"] = detail
             data.setdefault("weights", {})
         if response_model.__name__ == "StepikSearchQuerySet" and "queries" not in data:
             data["queries"] = data.get("search_queries", data.get("keywords", []))

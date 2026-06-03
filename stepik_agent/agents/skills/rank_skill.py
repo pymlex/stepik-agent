@@ -72,19 +72,29 @@ class RankSkill:
             freshness=freshness or "(not run)",
             courses=courses_json,
         )
-        result = self.llm.complete_structured(
+        base = self._build_from_weighted(courses, goal_text, freshness, None)
+
+        if self.llm.settings.mock_llm:
+            return base
+
+        llm_result = self.llm.complete_structured(
             prompts.RANK_SYSTEM, user, RankingResult
         )
-
-        if self.llm.settings.mock_llm or not result.ranked:
-            return self._build_from_weighted(courses, goal_text, freshness, result)
-
-        if not result.detailed_explanation.strip():
-            built = self._build_from_weighted(courses, goal_text, freshness, result)
-            result.detailed_explanation = built.detailed_explanation
-        if not result.weights:
-            result.weights = DEFAULT_WEIGHTS
-        return result
+        if llm_result.summary.strip():
+            base.summary = llm_result.summary
+        if llm_result.detailed_explanation.strip():
+            base.detailed_explanation = llm_result.detailed_explanation
+        elif llm_result.summary.strip():
+            base.detailed_explanation = llm_result.summary
+        if llm_result.ranked:
+            by_id = {item.course_id: item for item in llm_result.ranked}
+            for item in base.ranked:
+                extra = by_id.get(item.course_id)
+                if extra and extra.evidence:
+                    item.evidence = extra.evidence
+        if llm_result.rejected:
+            base.rejected = llm_result.rejected
+        return base
 
     def _build_from_weighted(
         self,
