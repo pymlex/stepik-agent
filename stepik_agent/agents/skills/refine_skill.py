@@ -27,6 +27,12 @@ class RefineSkill:
             queries=", ".join(initial_queries),
             samples="\n".join(samples) or "(empty)",
         )
-        return self.llm.complete_structured(
+        result = self.llm.complete_structured(
             prompts.REFINE_SYSTEM, user, StepikSearchQueryRefinement
         )
+        if not result.queries:
+            return StepikSearchQueryRefinement(
+                queries=initial_queries[:3],
+                rationale=result.rationale or "Повтор первичных запросов.",
+            )
+        return result

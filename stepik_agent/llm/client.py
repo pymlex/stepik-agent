@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from stepik_agent.config import AppSettings
 from stepik_agent.llm.json_parse import parse_json_object
+from stepik_agent.llm.schema_normalize import normalize_payload
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -58,27 +59,7 @@ class LLMClient:
                 len(raw),
             )
             return self._mock_response(response_model, user)
-        if response_model.__name__ == "RankingResult":
-            data.setdefault("ranked", [])
-            data.setdefault("rejected", [])
-            summary = str(data.get("summary", "")).strip()
-            detail = str(
-                data.get("detailed_explanation", data.get("analysis", ""))
-            ).strip()
-            if not summary:
-                summary = detail[:800] if detail else "Ранжирование по взвешенным критериям."
-            if not detail:
-                detail = summary
-            data["summary"] = summary
-            data["detailed_explanation"] = detail
-            data.setdefault("weights", {})
-        if response_model.__name__ == "StepikSearchQuerySet" and "queries" not in data:
-            data["queries"] = data.get("search_queries", data.get("keywords", []))
-        if response_model.__name__ == "StepikSearchQueryRefinement":
-            data.setdefault("queries", data.get("search_queries", []))
-            data.setdefault("rationale", str(data.get("analysis", ""))[:500])
-        if response_model.__name__ == "FreshnessQuerySet" and "queries" not in data:
-            data["queries"] = data.get("search_queries", [])
+        data = normalize_payload(data, response_model.__name__)
         return response_model.model_validate(data)
 
     def complete_text(self, system: str, user: str) -> str:
