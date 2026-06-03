@@ -5,7 +5,7 @@ __pycache__/
 dist/
 build/
 .env
-.env.*
+!.env.example
 zveno.txt
 gpt-oss-legacy.txt
 github token.txt
