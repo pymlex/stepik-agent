@@ -48,7 +48,7 @@ class SearchSkill:
         filters: DeterministicFilters,
         per_query_limit: int,
         stage: str,
-    ) -> tuple[list[dict], list[dict]]:
+    ) -> tuple[list[dict], list[dict], int]:
         merged: dict[int, dict] = {}
         for query in queries:
             batch = search_courses(
@@ -56,7 +56,6 @@ class SearchSkill:
                 limit=per_query_limit,
                 token=self.token,
                 language=filters.language,
-                is_paid=filters.is_paid,
             )
             ids = [c["id"] for c in batch]
             self.search_log.log_search(session_id, query, ids, stage=stage)
@@ -66,4 +65,4 @@ class SearchSkill:
 
         all_courses = list(merged.values())
         kept, rejected = apply_deterministic_filters(all_courses, filters)
-        return kept, rejected
+        return kept, rejected, len(all_courses)

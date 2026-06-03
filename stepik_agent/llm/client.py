@@ -55,6 +55,13 @@ class LLMClient:
                 data["summary"] = str(data.get("analysis", data.get("rationale", "")))[:2000]
             data.setdefault("ranked", [])
             data.setdefault("rejected", [])
+        if response_model.__name__ == "StepikSearchQuerySet" and "queries" not in data:
+            data["queries"] = data.get("search_queries", data.get("keywords", []))
+        if response_model.__name__ == "StepikSearchQueryRefinement":
+            data.setdefault("queries", data.get("search_queries", []))
+            data.setdefault("rationale", str(data.get("analysis", ""))[:500])
+        if response_model.__name__ == "FreshnessQuerySet" and "queries" not in data:
+            data["queries"] = data.get("search_queries", [])
         return response_model.model_validate(data)
 
     def complete_text(self, system: str, user: str) -> str:

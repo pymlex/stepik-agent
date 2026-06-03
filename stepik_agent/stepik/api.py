@@ -48,16 +48,13 @@ def search_courses(
     limit: int = 5,
     token: str | None = None,
     language: str | None = None,
-    is_paid: bool | None = None,
 ) -> list[dict]:
-    """Search Stepik API and return full text cards."""
+    """Search Stepik API and return full text cards. Paid filter is applied locally."""
     page = 1
     found = []
     params_base: dict = {"search": query}
     if language:
         params_base["language"] = language
-    if is_paid is not None:
-        params_base["is_paid"] = str(is_paid).lower()
 
     while len(found) < limit:
         params = {**params_base, "page": page}

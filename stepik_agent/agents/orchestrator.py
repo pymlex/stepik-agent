@@ -120,7 +120,7 @@ class AgentOrchestrator:
 
         self.stage = AgentStage.SEARCH_INITIAL
         parts.append(stage_banner(self.stage))
-        kept, rej = self.search_skill.run_searches(
+        kept, rej, found_raw = self.search_skill.run_searches(
             query_set.queries,
             self.session_id,
             self.filters,
@@ -131,11 +131,22 @@ class AgentOrchestrator:
 
         if not kept:
             self.stage = AgentStage.PRESENT
+            if found_raw == 0:
+                hint = (
+                    "Stepik не вернул курсов по этим запросам. "
+                    "Попробуйте другую формулировку цели или «ещё поиск»."
+                )
+            else:
+                hint = (
+                    f"Найдено {found_raw} курсов, все отсеяны фильтрами. "
+                    "Для «только бесплатные» укажите «пропустить», если выдача пустая."
+                )
             return (
                 "\n\n".join(parts)
                 + "\n\n"
                 + stage_banner(AgentStage.PRESENT)
-                + "\nКурсы не найдены. Ослабьте фильтры или измените цель."
+                + "\n"
+                + hint
             )
 
         self.stage = AgentStage.REVIEW_RESULTS
@@ -149,7 +160,7 @@ class AgentOrchestrator:
 
         self.stage = AgentStage.SEARCH_REFINED
         parts.append(stage_banner(self.stage))
-        kept2, rej2 = self.search_skill.run_searches(
+        kept2, rej2, _ = self.search_skill.run_searches(
             refinement.queries,
             self.session_id,
             self.filters,
@@ -236,7 +247,7 @@ class AgentOrchestrator:
                 self.prefs_snapshot(),
                 count=3,
             )
-            kept, rej = self.search_skill.run_searches(
+            kept, rej, _ = self.search_skill.run_searches(
                 extra.queries,
                 self.session_id,
                 self.filters,
