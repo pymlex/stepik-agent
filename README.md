@@ -10,7 +10,7 @@ Repository: [pymlex/stepik-agent](https://github.com/pymlex/stepik-agent)
 
 ```mermaid
 %%{init: {
-  "theme": "neutral", 
+  "theme": "base", 
   "themeVariables": {
     "fontSize": "11px",
     "mainBkg": "transparent",
