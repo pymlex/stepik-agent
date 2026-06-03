@@ -1,0 +1,100 @@
+import json
+import logging
+from typing import TypeVar
+
+from openai import OpenAI
+from pydantic import BaseModel
+
+from stepik_agent.config import AppSettings
+
+
+T = TypeVar("T", bound=BaseModel)
+logger = logging.getLogger("stepik_agent")
+
+
+class LLMClient:
+    """Structured LLM calls via Pydantic response models."""
+
+    def __init__(self, settings: AppSettings) -> None:
+        self.settings = settings
+        self._client = None
+        if settings.openai_api_key and not settings.mock_llm:
+            self._client = OpenAI(
+                api_key=settings.openai_api_key,
+                base_url=settings.openai_base_url,
+            )
+
+    def complete_structured(
+        self,
+        system: str,
+        user: str,
+        response_model: type[T],
+    ) -> T:
+        if self.settings.mock_llm or self._client is None:
+            return self._mock_response(response_model, user)
+
+        schema = response_model.model_json_schema()
+        response = self._client.chat.completions.create(
+            model=self.settings.openai_model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_model.__name__,
+                    "schema": schema,
+                    "strict": True,
+                },
+            },
+        )
+        raw = response.choices[0].message.content or "{}"
+        logger.info("llm_structured_call model=%s", response_model.__name__)
+        return response_model.model_validate(json.loads(raw))
+
+    def complete_text(self, system: str, user: str) -> str:
+        if self.settings.mock_llm or self._client is None:
+            return user[:500]
+
+        response = self._client.chat.completions.create(
+            model=self.settings.openai_model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        )
+        return response.choices[0].message.content or ""
+
+    def _mock_response(self, response_model: type[T], user: str) -> T:
+        name = response_model.__name__
+        if name == "StepikSearchQuerySet":
+            base = user.split()[:3]
+            word = base[-1] if base else "python"
+            return response_model.model_validate(
+                {"queries": [word, f"{word} basics", f"{word} course"]}
+            )
+        if name == "StepikSearchQueryRefinement":
+            return response_model.model_validate(
+                {
+                    "queries": ["python data", "machine learning"],
+                    "rationale": "Refined toward data topics.",
+                }
+            )
+        if name == "FreshnessQuerySet":
+            return response_model.model_validate(
+                {"queries": ["Python relevance 2026", "ML tools 2026"]}
+            )
+        if name == "RankingResult":
+            return response_model.model_validate(
+                {
+                    "ranked": [],
+                    "rejected": [],
+                    "summary": "Mock ranking: no LLM key configured.",
+                }
+            )
+        if name == "JudgeVerdict":
+            return response_model.model_validate(
+                {"passed": True, "score": 0.8, "rationale": "Mock judge pass."}
+            )
+        return response_model.model_validate({})

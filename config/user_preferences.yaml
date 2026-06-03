@@ -1,0 +1,9 @@
+user_id: default
+display_name: Learner
+default_result_count: 5
+message_tone: supportive
+preferred_language: ru
+max_workload_hours_per_week: null
+min_rating: null
+exclude_paid: false
+topics_history: []
