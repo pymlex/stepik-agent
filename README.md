@@ -9,7 +9,14 @@ Repository: [pymlex/stepik-agent](https://github.com/pymlex/stepik-agent)
 ## Architecture
 
 ```mermaid
-%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "11px"}}}%%
+%%{init: {
+  "theme": "neutral", 
+  "themeVariables": {
+    "fontSize": "11px",
+    "mainBkg": "transparent",
+    "background": "transparent"
+  }
+}}%%
 flowchart TB
     subgraph UI["Gradio Chat"]
         U[User messages]
