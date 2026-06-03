@@ -2,9 +2,13 @@
 
 import os
 import sys
+from pathlib import Path
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, ROOT)
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+import bootstrap_path
+
+bootstrap_path.setup()
 
 from stepik_agent.agents.orchestrator import AgentOrchestrator
 from stepik_agent.config import load_settings
@@ -17,7 +21,7 @@ GOAL = os.environ.get(
 )
 FORM = os.environ.get(
     "E2E_FORM",
-    "ru\nда\nпропустить\n8\n4.0",
+    "ru\nпропустить\nпропустить\nпропустить\nпропустить",
 )
 
 

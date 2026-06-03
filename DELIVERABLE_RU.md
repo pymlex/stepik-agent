@@ -7,25 +7,20 @@ https://github.com/pymlex/stepik-agent
 ```bash
 git clone https://github.com/pymlex/stepik-agent
 cd stepik-agent
+pip install -r requirements.txt
 ```
 
 ## Запуск
 
-1. Клонировать репозиторий и установить зависимости: `pip install -r requirements.txt`.
-2. Скопировать `.env.example` в `.env` и указать `OPENAI_API_KEY` для Zveno API. Остальные ключи опциональны.
-3. Проверка end-to-end: `python scripts/run_e2e.py` — в конце должно быть `E2E PASS`.
-4. Чат Gradio: `python main.py` при `PYTHONPATH` равном корню репозитория.
-5. Запись на курс: `stepik_config.json` из примера, в чате «запись на курс ID», затем «подтверждаю запись».
+Команды выполняются из корня репозитория после `cd stepik-agent`. Путь вручную задавать не нужно.
 
-```powershell
-git clone https://github.com/pymlex/stepik-agent
-cd stepik-agent
-pip install -r requirements.txt
-$env:PYTHONPATH = (Get-Location)
-copy .env.example .env
-python scripts/run_e2e.py
-python main.py
-```
+| Действие | Windows | Linux / macOS |
+| --- | --- | --- |
+| Полный прогон для отчёта | `run_report.bat` | `python scripts/generate_report.py` |
+| Проверка E2E | `run_e2e.bat` | `python scripts/run_e2e.py` |
+| Чат Gradio | `run_gradio.bat` | `python main.py` |
+
+Перед первым запуском: `copy .env.example .env` и заполнить `OPENAI_API_KEY`. Локальный прогон для этого отчёта уже выполнен, лог в `artifacts/report_run.txt`.
 
 ## Пример входных данных
 
@@ -35,44 +30,44 @@ python main.py
 Хочу изучить Python для анализа данных: pandas, визуализация, основы статистики
 ```
 
-**Сообщение 2 — детерминированные поля, по одному ответу на строку**
+**Сообщение 2 — детерминированные поля**
 
 ```
 ru
-да
 пропустить
-8
-4.0
+пропустить
+пропустить
+пропустить
 ```
 
 ## Пример результата
 
+Фрагмент реального прогона `2026-06-03 16:59 UTC`, полный текст в `artifacts/report_run.txt`.
+
 ```
 [Этап: Генерация поисковых запросов]
+Запросы: Python pandas, Python визуализация данных, Python статистика, Анализ данных Python, Python matplotlib seaborn
 
-Запросы: python data analysis, pandas stepik, визуализация данных python, ...
-
-[Этап: Первичный поиск на Stepik]
-...
+[Этап: Анализ первичной выдачи]
+Первичная выдача: 16 курсов.
 
 ## Подборка курсов
 
-1. **Программирование на Python** (id=67)
-   https://stepik.org/course/67
-   - `summary`: Курс для начинающих...
-   - `requirements`: Базовые навыки работы с ПК...
+1. **Руслан Сенаторов: Анализ данных. Python Pandas EDA. Data Science** (id=240962)
+   https://stepik.org/course/240962/
+   - `summary`: математики(статистика на pandas) для data science
+   - `description`: от загрузки и очистки до визуализации и базовой статистики
 
-2. **Введение в Data Science** (id=...)
-   ...
+2. **Графика в Python: Matplotlib, Tkinter, Pandas** (id=264192)
+   https://stepik.org/course/264192/
+   - `summary`: Практический курс по визуализации данных в Python...
 
 ## Почему такое ранжирование
 
-Курс 67 выше из‑за совпадения цели с полем summary и наличия практики в course_format.
-Курс X ниже: workload выше заданного лимита 8 ч/нед.
+Курсы отсортированы по соответствию цели: курс 240962 охватывает Python, Pandas, визуализацию и базовую статистику...
 
-## Отсеянные фильтрами
-
-- Название курса (id=...): language mismatch: en
+## Метрики: событий в search_log = 38
+## Статус: E2E PASS
 ```
 
 ## Описание

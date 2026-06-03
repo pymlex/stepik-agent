@@ -2,9 +2,13 @@
 
 import os
 import sys
+from pathlib import Path
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, ROOT)
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+import bootstrap_path
+
+bootstrap_path.setup()
 
 from stepik_agent.agents.orchestrator import AgentOrchestrator
 from stepik_agent.config import load_settings
@@ -14,7 +18,7 @@ from models.schemas import AgentStage
 
 def main() -> None:
     settings = load_settings()
-    settings.mock_llm = os.environ.get("STEPIK_AGENT_MOCK_LLM", "1") == "1"
+    settings.mock_llm = os.environ.get("STEPIK_AGENT_MOCK_LLM", "0") == "1"
     setup_logging(settings.log_dir)
     agent = AgentOrchestrator(settings)
     agent.bootstrap_preferences()

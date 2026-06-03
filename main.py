@@ -1,3 +1,7 @@
+import bootstrap_path
+
+bootstrap_path.setup()
+
 from stepik_agent.gradio_app.app import launch
 
 

@@ -1,5 +1,3 @@
-$Root = Split-Path -Parent $PSScriptRoot
-Set-Location $Root
-$env:PYTHONPATH = $Root
+Set-Location (Split-Path -Parent $PSScriptRoot)
 if (-not (Test-Path ".env")) { Copy-Item ".env.example" ".env" }
 python main.py

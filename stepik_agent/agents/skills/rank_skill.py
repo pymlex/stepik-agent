@@ -67,7 +67,10 @@ class RankSkill:
         )
 
         if self.llm.settings.mock_llm or not result.ranked:
-            return self._deterministic_rank(courses, rejected_det, goal_text)
+            det = self._deterministic_rank(courses, rejected_det, goal_text)
+            if result.summary and result.summary.strip():
+                det.summary = result.summary
+            return det
 
         return result
 

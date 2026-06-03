@@ -153,41 +153,48 @@ pip install -r requirements.txt
 $env:PYTHONPATH = (Get-Location)
 ```
 
-## End-to-end check
+## Quick run
 
-```bash
-export PYTHONPATH="$(pwd)"
-python scripts/run_e2e.py
-```
+From the repository root after `cd stepik-agent`:
 
-Expected terminal line: `E2E PASS`. The script runs goal, deterministic form, Stepik search, refine, freshness, rank, and writes to `data/search_log.db`.
+| Task | Windows | Linux / macOS |
+| --- | --- | --- |
+| Full report run | `run_report.bat` | `python scripts/generate_report.py` |
+| E2E check | `run_e2e.bat` | `python scripts/run_e2e.py` |
+| Gradio chat | `run_gradio.bat` | `python main.py` |
+
+`bootstrap_path.py` adds the project root to `sys.path` automatically. No `PYTHONPATH` required.
 
 ## Run commands
 
 ### Gradio chat
 
 ```powershell
-$env:PYTHONPATH = (Get-Location)
-.\scripts\run_gradio.ps1
+.\run_gradio.bat
 ```
 
 ```bash
-export PYTHONPATH="$(pwd)"
-bash scripts/run_gradio.sh
+python main.py
 ```
+
+### Report and E2E
+
+```powershell
+.\run_report.bat
+.\run_e2e.bat
+```
+
+```bash
+python scripts/generate_report.py
+python scripts/run_e2e.py
+```
+
+Report output: `artifacts/report_run.txt`. Expected E2E line: `E2E PASS`.
 
 ### Demo without Gradio
 
-```powershell
-$env:PYTHONPATH = (Get-Location)
+```bash
 python scripts/run_demo.py
-```
-
-### End-to-end
-
-```powershell
-$env:PYTHONPATH = (Get-Location)
-python scripts/run_e2e.py
 ```
 
 ### Tests with LLM-as-a-Judge

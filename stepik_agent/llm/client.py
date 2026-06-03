@@ -49,7 +49,13 @@ class LLMClient:
         )
         raw = response.choices[0].message.content or "{}"
         logger.info("llm_structured_call model=%s", response_model.__name__)
-        return response_model.model_validate(json.loads(raw))
+        data = json.loads(raw)
+        if response_model.__name__ == "RankingResult":
+            if "summary" not in data:
+                data["summary"] = str(data.get("analysis", data.get("rationale", "")))[:2000]
+            data.setdefault("ranked", [])
+            data.setdefault("rejected", [])
+        return response_model.model_validate(data)
 
     def complete_text(self, system: str, user: str) -> str:
         if self.settings.mock_llm or self._client is None:
