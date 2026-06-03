@@ -1,4 +1,5 @@
 import gradio as gr
+from gradio.components.chatbot import ChatMessage
 
 from stepik_agent.agents.orchestrator import AgentOrchestrator, WELCOME_TEXT
 from stepik_agent.agents.stages import stage_banner
@@ -7,21 +8,43 @@ from stepik_agent.logging_setup import setup_logging
 from models.schemas import AgentStage
 
 
+def _as_messages(history) -> list[ChatMessage]:
+    if history is None:
+        return []
+    out: list[ChatMessage] = []
+    for item in history:
+        if isinstance(item, ChatMessage):
+            out.append(item)
+            continue
+        if isinstance(item, dict):
+            out.append(
+                ChatMessage(
+                    role=item.get("role", "assistant"),
+                    content=str(item.get("content", "")),
+                )
+            )
+    return out
+
+
 def build_app() -> gr.Blocks:
     settings = load_settings()
     setup_logging(settings.log_dir)
     orchestrator = AgentOrchestrator(settings)
     orchestrator.bootstrap_preferences()
 
-    def respond(message: str, history: list) -> tuple:
+    welcome = [ChatMessage(role="assistant", content=WELCOME_TEXT)]
+
+    def on_send(message: str, history) -> tuple:
+        messages = _as_messages(history)
         if not message.strip():
-            return history, history
+            stage = stage_banner(orchestrator.stage)
+            return messages, messages, stage, ""
+
         reply = orchestrator.handle_message(message)
-        history = history + [
-            {"role": "user", "content": message},
-            {"role": "assistant", "content": reply},
-        ]
-        return history, history
+        messages.append(ChatMessage(role="user", content=message))
+        messages.append(ChatMessage(role="assistant", content=reply))
+        stage = stage_banner(orchestrator.stage)
+        return messages, messages, stage, ""
 
     with gr.Blocks(title="Stepik Agent") as demo:
         gr.Markdown("# Stepik course agent")
@@ -30,25 +53,13 @@ def build_app() -> gr.Blocks:
             value=stage_banner(AgentStage.COLLECT_GOAL),
             interactive=False,
         )
-        chat = gr.Chatbot(
-            label="Диалог",
-            value=[{"role": "assistant", "content": WELCOME_TEXT}],
-        )
-        state = gr.State([])
+        chat = gr.Chatbot(label="Диалог", value=welcome)
+        state = gr.State(welcome)
         msg = gr.Textbox(label="Сообщение", placeholder="Опишите цель обучения…")
         send = gr.Button("Отправить")
 
-        def on_send(message, history, st):
-            new_hist, new_st = respond(message, st or history)
-            stage = stage_banner(orchestrator.stage)
-            return new_hist, new_hist, stage
-
-        send.click(on_send, [msg, chat, state], [chat, state, stage_box]).then(
-            lambda: "", outputs=[msg]
-        )
-        msg.submit(on_send, [msg, chat, state], [chat, state, stage_box]).then(
-            lambda: "", outputs=[msg]
-        )
+        send.click(on_send, [msg, state], [state, chat, stage_box, msg])
+        msg.submit(on_send, [msg, state], [state, chat, stage_box, msg])
 
     return demo
 
